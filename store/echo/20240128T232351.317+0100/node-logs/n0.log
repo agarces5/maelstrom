@@ -1,0 +1,3 @@
+thread 'main' panicked at src/main.rs:7:65:
+called `Result::unwrap()` on an `Err` value: Error("invalid type: map, expected a sequence", line: 1, column: 1)
+note: run with `RUST_BACKTRACE=1` environment variable to display a backtrace

@@ -6,6 +6,7 @@ use super::{body::Body, message::Message, payload::Payload};
 pub struct Node {
     pub node_id: String,
     pub id: usize,
+    pub messages: Vec<String>,
 }
 
 impl Node {
@@ -32,11 +33,16 @@ impl Node {
                 }
             }
             Payload::GenerateOk { id } => Payload::GenerateOk { id: id.to_string() },
-            Payload::Topology { topology: _ } => todo!(),
+            Payload::Topology { topology: _ } => Payload::TopologyOk,
             Payload::TopologyOk => todo!(),
-            Payload::Broadcast { message: _ } => todo!(),
+            Payload::Broadcast { message } => {
+                self.messages.push(message.to_owned());
+                Payload::BroadcastOk
+            }
             Payload::BroadcastOk => todo!(),
-            Payload::Read => todo!(),
+            Payload::Read => Payload::ReadOk {
+                messages: self.messages.drain(..).collect(),
+            },
             Payload::ReadOk { messages: _ } => todo!(),
         };
         Message {
@@ -85,6 +91,7 @@ mod test {
         let mut node = Node {
             node_id: String::from("n1"),
             id: 0,
+            messages: Vec::new(),
         };
 
         assert_eq!(res, node.reply(req));
@@ -113,6 +120,7 @@ mod test {
         let mut node = Node {
             node_id: String::from("n1"),
             id: 0,
+            messages: Vec::new(),
         };
 
         assert_eq!(res, node.reply(req));
@@ -137,6 +145,7 @@ mod test {
         let node = Node {
             node_id: String::from("n1"),
             id: 0,
+            messages: Vec::new(),
         };
         // As send() accept a Writer, use a Cursor to mock an in-memory buffer that is cheaper than other Writer
         let mut channel = std::io::Cursor::new(Vec::new());
@@ -160,6 +169,7 @@ mod test {
         let mut node = Node {
             node_id: String::from("n1"),
             id: 0,
+            messages: Vec::new(),
         };
 
         let generated_ids: Vec<String> = (0..ids.len())

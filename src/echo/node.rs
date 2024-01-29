@@ -32,6 +32,12 @@ impl Node {
                 }
             }
             Payload::GenerateOk { id } => Payload::GenerateOk { id: id.to_string() },
+            Payload::Topology { topology: _ } => todo!(),
+            Payload::TopologyOk => todo!(),
+            Payload::Broadcast { message: _ } => todo!(),
+            Payload::BroadcastOk => todo!(),
+            Payload::Read => todo!(),
+            Payload::ReadOk { messages: _ } => todo!(),
         };
         Message {
             src: req.dest.clone(),

@@ -2,7 +2,10 @@ use maelstrom::echo::message::Message;
 use maelstrom::echo::node::Node;
 
 fn main() -> anyhow::Result<()> {
-    let node = Node;
+    let mut node = Node {
+        id: 0,
+        node_id: String::new(),
+    };
     let stdin = std::io::stdin().lock();
     let mut stdout = std::io::stdout().lock();
 

@@ -64,6 +64,8 @@ impl Node {
 
 #[cfg(test)]
 mod test {
+    use std::any::Any;
+
     use super::*;
 
     #[test]
@@ -179,5 +181,84 @@ mod test {
             })
             .collect();
         assert_eq!(ids, generated_ids);
+    }
+    #[test]
+    fn it_should_return_a_broadcast_ok_message() {
+        let body = Body {
+            payload: Payload::Broadcast {
+                message: "1000".to_string(),
+            },
+            ..Default::default()
+        };
+
+        let req = Message::new("c1", "n1", &body);
+
+        let mut node = Node {
+            node_id: String::from("n1"),
+            id: 0,
+            messages: Vec::new(),
+        };
+
+        assert_eq!(node.reply(req).body.payload, Payload::BroadcastOk);
+    }
+    #[test]
+    fn it_should_return_a_correct_read_ok_message() {
+        let msgs = [
+            "0".to_owned(),
+            "25".to_owned(),
+            "50".to_owned(),
+            "75".to_owned(),
+            "100".to_owned(),
+        ];
+        let broadcast_messages = (0..msgs.len()).map(|i| {
+            Message::new(
+                "c1",
+                "n1",
+                &Body {
+                    payload: Payload::Broadcast {
+                        message: msgs[i].to_string(),
+                    },
+                    ..Default::default()
+                },
+            )
+        });
+
+        let mut node = Node {
+            node_id: String::from("n1"),
+            id: 0,
+            messages: Vec::new(),
+        };
+
+        broadcast_messages.for_each(|msg| {
+            node.reply(msg);
+        });
+
+        assert_eq!(node.messages.as_ref(), msgs);
+
+        let read_msg = Message::new(
+            "c1",
+            "n1",
+            &Body {
+                payload: Payload::Read,
+                ..Default::default()
+            },
+        );
+
+        let read_ok_msg = node.reply(read_msg.clone());
+
+        assert_eq!(
+            read_ok_msg.body.payload.type_id(),
+            Payload::ReadOk {
+                messages: Vec::new()
+            }
+            .type_id()
+        );
+        assert_eq!(
+            read_ok_msg.body.payload,
+            Payload::ReadOk {
+                messages: msgs.to_vec()
+            }
+        );
+        assert!(node.messages.is_empty());
     }
 }

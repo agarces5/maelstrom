@@ -6,7 +6,7 @@ use super::{body::Body, message::Message, payload::Payload};
 pub struct Node {
     pub node_id: String,
     pub id: usize,
-    pub messages: Vec<String>,
+    pub messages: Vec<usize>,
 }
 
 impl Node {
@@ -39,11 +39,13 @@ impl Node {
                 self.messages.push(message.to_owned());
                 Payload::BroadcastOk
             }
-            Payload::BroadcastOk => todo!(),
+            Payload::BroadcastOk => Payload::BroadcastOk,
             Payload::Read => Payload::ReadOk {
                 messages: self.messages.drain(..).collect(),
             },
-            Payload::ReadOk { messages: _ } => todo!(),
+            Payload::ReadOk { messages } => Payload::ReadOk {
+                messages: messages.to_vec(),
+            },
         };
         Message {
             src: req.dest.clone(),
@@ -185,9 +187,7 @@ mod test {
     #[test]
     fn it_should_return_a_broadcast_ok_message() {
         let body = Body {
-            payload: Payload::Broadcast {
-                message: "1000".to_string(),
-            },
+            payload: Payload::Broadcast { message: 1000 },
             ..Default::default()
         };
 
@@ -203,21 +203,13 @@ mod test {
     }
     #[test]
     fn it_should_return_a_correct_read_ok_message() {
-        let msgs = [
-            "0".to_owned(),
-            "25".to_owned(),
-            "50".to_owned(),
-            "75".to_owned(),
-            "100".to_owned(),
-        ];
+        let msgs = [0, 25, 50, 75, 100];
         let broadcast_messages = (0..msgs.len()).map(|i| {
             Message::new(
                 "c1",
                 "n1",
                 &Body {
-                    payload: Payload::Broadcast {
-                        message: msgs[i].to_string(),
-                    },
+                    payload: Payload::Broadcast { message: msgs[i] },
                     ..Default::default()
                 },
             )

@@ -27,17 +27,11 @@ pub enum Payload {
     },
     TopologyOk,
     Broadcast {
-        message: String,
+        message: usize,
     },
     BroadcastOk,
     Read,
     ReadOk {
-        messages: Vec<String>,
+        messages: Vec<usize>,
     },
 }
-// {:type (eq "topology"),
-//  :topology {java.lang.String [java.lang.String]},
-//  :msg_id Int}
-// {:type (eq "topology_ok"),
-//  #schema.core.OptionalKey{:k :msg_id} Int,
-//  :in_reply_to Int}

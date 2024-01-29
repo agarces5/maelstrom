@@ -2,7 +2,7 @@ use serde::{Deserialize, Serialize};
 
 use super::payload::Payload;
 
-#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
+#[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
 pub struct Body {
     pub msg_id: Option<usize>,
     pub in_reply_to: Option<usize>,

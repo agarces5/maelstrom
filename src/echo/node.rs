@@ -41,7 +41,8 @@ impl Node {
             }
             Payload::BroadcastOk => Payload::BroadcastOk,
             Payload::Read => Payload::ReadOk {
-                messages: self.messages.drain(..).collect(),
+                // messages: self.messages.drain(..).collect(),
+                messages: self.messages.clone(),
             },
             Payload::ReadOk { messages } => Payload::ReadOk {
                 messages: messages.to_vec(),

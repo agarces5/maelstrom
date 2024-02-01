@@ -55,11 +55,14 @@ impl Node {
             Payload::GenerateOk { id: _ } => {}
             Payload::Topology { topology } => {
                 self.topology = topology.clone();
-                self.gossip_nodes.extend_from_slice(
-                    topology
-                        .get(&self.node_id)
-                        .expect("Expect self node id to be in topology"),
-                );
+                self.gossip_nodes
+                    .extend_from_slice(&topology.keys().cloned().collect::<Vec<String>>());
+                self.gossip_nodes.retain(|node_id| node_id != &self.node_id);
+                // self.gossip_nodes.extend_from_slice(
+                //     topology
+                //         .get(&self.node_id)
+                //         .expect("Expect self node id to be in topology"),
+                // );
                 res.body.payload = Payload::TopologyOk;
                 self.send(res)?
             }
@@ -68,14 +71,12 @@ impl Node {
                 self.messages.insert(*message);
                 res.body.payload = Payload::BroadcastOk;
                 self.send(res)?;
-                for node_id in self.topology.keys() {
+                for node_id in &self.gossip_nodes {
                     let msg = Message {
                         src: self.node_id.to_string(),
                         dest: node_id.to_string(),
                         body: Body {
-                            payload: Payload::Gossip {
-                                messages: self.messages.clone(),
-                            },
+                            payload: Payload::Gossip { message: *message },
                             ..Default::default()
                         },
                     };
@@ -90,10 +91,11 @@ impl Node {
                 self.send(res)?
             }
             Payload::ReadOk { messages: _ } => {}
-            Payload::Gossip { messages } => {
-                self.messages.extend(messages);
-                res.body.payload = Payload::GossipOk;
-                self.send(res)?;
+            Payload::Gossip { message } => {
+                self.messages.insert(*message);
+                // TODO: We are not using responses right now
+                // res.body.payload = Payload::GossipOk;
+                // self.send(res)?;
             }
             Payload::GossipOk => {}
         }

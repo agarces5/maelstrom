@@ -22,14 +22,11 @@ fn main() -> anyhow::Result<()> {
         for msg in stdin {
             let msg = serde_json::from_str(&msg?)?;
             let res = node.lock().unwrap().reply(msg);
-            eprintln!("Message received: {:?}", res);
             tx.send(res)?;
-            // node.send(res, &mut stdout)?;
         }
         anyhow::Ok(())
     });
     while let Ok(res) = rx.recv() {
-        eprintln!("{:?}", res);
         node.lock().unwrap().send(res, &mut stdout)?;
     }
     resp_thread

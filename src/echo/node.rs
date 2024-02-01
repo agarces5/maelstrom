@@ -1,6 +1,6 @@
 use serde::{Deserialize, Serialize};
 
-use super::{body::Body, message::Message, payload::Payload};
+use super::{body::Body, message::Message};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Node {
@@ -11,43 +11,7 @@ pub struct Node {
 
 impl Node {
     pub fn reply(&mut self, req: Message) -> Message {
-        let payload = match &req.body.payload {
-            Payload::Echo { echo } => Payload::EchoOk {
-                echo: echo.to_string(),
-            },
-            Payload::EchoOk { echo } => Payload::EchoOk {
-                echo: echo.to_string(),
-            },
-            Payload::Init {
-                node_id,
-                node_ids: _ids,
-            } => {
-                self.node_id = node_id.to_owned();
-                Payload::InitOk {}
-            }
-            Payload::InitOk {} => Payload::InitOk {},
-            Payload::Generate {} => {
-                self.id += 1;
-                Payload::GenerateOk {
-                    id: format!("{}-{}", self.node_id, self.id),
-                }
-            }
-            Payload::GenerateOk { id } => Payload::GenerateOk { id: id.to_string() },
-            Payload::Topology { topology: _ } => Payload::TopologyOk,
-            Payload::TopologyOk => todo!(),
-            Payload::Broadcast { message } => {
-                self.messages.push(message.to_owned());
-                Payload::BroadcastOk
-            }
-            Payload::BroadcastOk => Payload::BroadcastOk,
-            Payload::Read => Payload::ReadOk {
-                // messages: self.messages.drain(..).collect(),
-                messages: self.messages.clone(),
-            },
-            Payload::ReadOk { messages } => Payload::ReadOk {
-                messages: messages.to_vec(),
-            },
-        };
+        let payload = req.body.payload.get_response_payload(self);
         Message {
             src: req.dest.clone(),
             dest: req.src.clone(),
@@ -68,6 +32,8 @@ impl Node {
 #[cfg(test)]
 mod test {
     use std::any::Any;
+
+    use crate::echo::payload::Payload;
 
     use super::*;
 
@@ -252,6 +218,5 @@ mod test {
                 messages: msgs.to_vec()
             }
         );
-        assert!(node.messages.is_empty());
     }
 }

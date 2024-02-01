@@ -1,9 +1,10 @@
 use std::{
+    collections::{HashMap, HashSet},
     io::BufRead,
     sync::{Arc, Mutex},
 };
 
-use maelstrom::node::Node;
+use maelstrom::{message::Message, node::Node};
 
 fn main() -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -11,8 +12,10 @@ fn main() -> anyhow::Result<()> {
     let node = Arc::new(Mutex::new(Node {
         id: 0,
         node_id: String::new(),
-        messages: Vec::new(),
+        messages: HashSet::new(),
         tx: Some(tx.clone()),
+        gossip_nodes: Vec::new(),
+        topology: HashMap::new(),
     }));
     let mut stdout = std::io::stdout().lock();
 
@@ -21,11 +24,9 @@ fn main() -> anyhow::Result<()> {
         let node = resp_node;
         let stdin = std::io::stdin().lock().lines();
         for msg in stdin {
-            let msg = serde_json::from_str(&msg?)?;
             let mut node = node.lock().unwrap();
-            let res = node.reply(msg);
-            node.send(res)?;
-            // tx.send(res)?;
+            let msg: Message = serde_json::from_str(&msg?)?;
+            node.handle_message(msg)?;
         }
         anyhow::Ok(())
     });

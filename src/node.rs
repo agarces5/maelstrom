@@ -1,4 +1,10 @@
-use std::{fmt::Debug, sync::mpsc::Sender};
+use std::{
+    collections::{HashMap, HashSet},
+    fmt::Debug,
+    sync::mpsc::Sender,
+};
+
+use crate::payload::Payload;
 
 use super::{body::Body, message::Message};
 
@@ -6,27 +12,97 @@ use super::{body::Body, message::Message};
 pub struct Node {
     pub node_id: String,
     pub id: usize,
-    pub messages: Vec<usize>,
+    pub messages: HashSet<usize>,
     pub tx: Option<Sender<Message>>,
+    pub gossip_nodes: Vec<String>,
+    pub topology: HashMap<String, Vec<String>>,
 }
 
 impl Node {
-    pub fn send(&self, msg: Message) -> anyhow::Result<()> {
+    pub fn handle_message(&mut self, msg: Message) -> anyhow::Result<()> {
+        let mut res = Message {
+            src: msg.dest.clone(),
+            dest: msg.src.clone(),
+            body: Body {
+                in_reply_to: msg.body.msg_id,
+                payload: Payload::InitOk,
+                ..msg.body
+            },
+        };
+        match &msg.body.payload {
+            Payload::Echo { echo } => {
+                res.body.payload = Payload::EchoOk {
+                    echo: echo.to_string(),
+                };
+                self.send(res)?
+            }
+            Payload::EchoOk { echo: _ } => {}
+            Payload::Init {
+                node_id,
+                node_ids: _,
+            } => {
+                self.node_id = node_id.to_owned();
+                self.send(res)?
+            }
+            Payload::InitOk => {}
+            Payload::Generate => {
+                self.id += 1;
+                res.body.payload = Payload::GenerateOk {
+                    id: format!("{}-{}", self.node_id, self.id),
+                };
+                self.send(res)?
+            }
+            Payload::GenerateOk { id: _ } => {}
+            Payload::Topology { topology } => {
+                self.topology = topology.clone();
+                self.gossip_nodes.extend_from_slice(
+                    topology
+                        .get(&self.node_id)
+                        .expect("Expect self node id to be in topology"),
+                );
+                res.body.payload = Payload::TopologyOk;
+                self.send(res)?
+            }
+            Payload::TopologyOk => {}
+            Payload::Broadcast { message } => {
+                self.messages.insert(*message);
+                res.body.payload = Payload::BroadcastOk;
+                self.send(res)?;
+                for node_id in self.topology.keys() {
+                    let msg = Message {
+                        src: self.node_id.to_string(),
+                        dest: node_id.to_string(),
+                        body: Body {
+                            payload: Payload::Gossip {
+                                messages: self.messages.clone(),
+                            },
+                            ..Default::default()
+                        },
+                    };
+                    self.send(msg)?;
+                }
+            }
+            Payload::BroadcastOk => {}
+            Payload::Read => {
+                res.body.payload = Payload::ReadOk {
+                    messages: self.messages.clone(),
+                };
+                self.send(res)?
+            }
+            Payload::ReadOk { messages: _ } => {}
+            Payload::Gossip { messages } => {
+                self.messages.extend(messages);
+                res.body.payload = Payload::GossipOk;
+                self.send(res)?;
+            }
+            Payload::GossipOk => {}
+        }
+        Ok(())
+    }
+    fn send(&self, msg: Message) -> anyhow::Result<()> {
         let tx = self.tx.as_ref().unwrap();
         tx.send(msg)?;
         Ok(())
-    }
-    pub fn reply(&mut self, req: Message) -> Message {
-        let payload = req.body.payload.get_response_payload(self);
-        Message {
-            src: req.dest.clone(),
-            dest: req.src.clone(),
-            body: Body {
-                payload,
-                in_reply_to: req.body.msg_id,
-                ..req.body
-            },
-        }
     }
     pub fn write(&self, res: Message, mut channel: impl std::io::Write) -> anyhow::Result<()> {
         serde_json::to_writer(&mut channel, &res)?;
@@ -37,73 +113,12 @@ impl Node {
 
 #[cfg(test)]
 mod test {
-    use std::any::Any;
+    use std::{any::Any, io::Cursor, sync::mpsc::channel};
 
     use crate::payload::Payload;
 
     use super::*;
 
-    #[test]
-    fn it_makes_an_echo_ok_resp() {
-        let body = Body::new(
-            Some(1),
-            None,
-            Payload::Echo {
-                echo: "Please echo 35".to_owned(),
-            },
-        );
-        let req = Message::new("c1", "n1", &body);
-        let res = Message::new(
-            "n1",
-            "c1",
-            &Body {
-                in_reply_to: body.msg_id,
-                payload: Payload::EchoOk {
-                    echo: "Please echo 35".to_owned(),
-                },
-                ..body
-            },
-        );
-
-        let mut node = Node {
-            node_id: String::from("n1"),
-            id: 0,
-            messages: Vec::new(),
-            tx: None,
-        };
-
-        assert_eq!(res, node.reply(req));
-    }
-    #[test]
-    fn it_makes_an_init_ok_resp() {
-        let body = Body::new(
-            Some(1),
-            None,
-            Payload::Init {
-                node_id: "n3".to_string(),
-                node_ids: vec!["n1".to_string(), "n2".to_string(), "n3".to_string()],
-            },
-        );
-        let req = Message::new("c1", "n1", &body);
-        let res = Message::new(
-            "n1",
-            "c1",
-            &Body {
-                in_reply_to: body.msg_id,
-                payload: Payload::InitOk {},
-                ..body
-            },
-        );
-
-        let mut node = Node {
-            node_id: String::from("n1"),
-            id: 0,
-            messages: Vec::new(),
-            tx: None,
-        };
-
-        assert_eq!(res, node.reply(req));
-    }
     #[test]
     fn it_should_write_resp_into_channel_provided() {
         let body = Body::new(
@@ -124,11 +139,13 @@ mod test {
         let node = Node {
             node_id: String::from("n1"),
             id: 0,
-            messages: Vec::new(),
+            messages: HashSet::new(),
             tx: None,
+            gossip_nodes: Vec::new(),
+            topology: HashMap::new(),
         };
         // As send() accept a Writer, use a Cursor to mock an in-memory buffer that is cheaper than other Writer
-        let mut channel = std::io::Cursor::new(Vec::new());
+        let mut channel = Cursor::new(Vec::new());
         // Send the message into buffer
         let result = node.write(req, &mut channel);
 
@@ -137,7 +154,87 @@ mod test {
         assert_eq!(channel.get_ref().to_owned(), response);
     }
     #[test]
+    fn it_makes_an_echo_ok_resp() {
+        let (tx, rx) = channel();
+        let mut node = Node {
+            node_id: String::from("n1"),
+            id: 0,
+            messages: HashSet::new(),
+            tx: Some(tx),
+            gossip_nodes: Vec::new(),
+            topology: HashMap::new(),
+        };
+        let body = Body::new(
+            Some(1),
+            None,
+            Payload::Echo {
+                echo: "Please echo 35".to_owned(),
+            },
+        );
+        let req = Message::new("c1", "n1", &body);
+        let res = Message::new(
+            "n1",
+            "c1",
+            &Body {
+                in_reply_to: body.msg_id,
+                payload: Payload::EchoOk {
+                    echo: "Please echo 35".to_owned(),
+                },
+                ..body
+            },
+        );
+
+        let result = node.handle_message(req);
+
+        assert!(result.is_ok());
+        assert_eq!(res, rx.recv().unwrap());
+    }
+    #[test]
+    fn it_makes_an_init_ok_resp() {
+        let (tx, rx) = channel();
+        let mut node = Node {
+            node_id: String::from("n1"),
+            id: 0,
+            messages: HashSet::new(),
+            tx: Some(tx),
+            gossip_nodes: Vec::new(),
+            topology: HashMap::new(),
+        };
+        let body = Body::new(
+            Some(1),
+            None,
+            Payload::Init {
+                node_id: "n3".to_string(),
+                node_ids: vec!["n1".to_string(), "n2".to_string(), "n3".to_string()],
+            },
+        );
+        let req = Message::new("c1", "n1", &body);
+        let res = Message::new(
+            "n1",
+            "c1",
+            &Body {
+                in_reply_to: body.msg_id,
+                payload: Payload::InitOk {},
+                ..body
+            },
+        );
+
+        let result = node.handle_message(req);
+
+        assert!(result.is_ok());
+        assert_eq!(res, rx.recv().unwrap());
+    }
+    #[test]
     fn it_should_generate_differents_id() {
+        let (tx, rx) = channel();
+        let mut node = Node {
+            node_id: String::from("n1"),
+            id: 0,
+            messages: HashSet::new(),
+            tx: Some(tx),
+            gossip_nodes: Vec::new(),
+            topology: HashMap::new(),
+        };
         let body = Body {
             payload: Payload::Generate {},
             ..Default::default()
@@ -146,20 +243,19 @@ mod test {
         let req = Message::new("c1", "n1", &body);
         let ids = Vec::from_iter((1..6).map(|n| format!("n1-{}", n)));
 
-        let mut node = Node {
-            node_id: String::from("n1"),
-            id: 0,
-            messages: Vec::new(),
-            tx: None,
-        };
+        let mut result: Vec<String> = Vec::new();
 
-        let generated_ids: Vec<String> = (0..ids.len())
-            .map(|_| match node.reply(req.clone()).body.payload {
-                Payload::GenerateOk { id } => id,
-                _ => String::new(),
-            })
-            .collect();
-        assert_eq!(ids, generated_ids);
+        for _i in 0..5 {
+            let msg = Message { ..req.clone() };
+            let _ = node.handle_message(msg);
+            if let Ok(msg) = rx.recv() {
+                if let Payload::GenerateOk { id } = msg.body.payload {
+                    result.push(id)
+                }
+            }
+        }
+
+        assert_eq!(ids, result);
     }
     #[test]
     fn it_should_return_a_broadcast_ok_message() {
@@ -170,41 +266,54 @@ mod test {
 
         let req = Message::new("c1", "n1", &body);
 
+        let (tx, rx) = channel();
         let mut node = Node {
             node_id: String::from("n1"),
             id: 0,
-            messages: Vec::new(),
-            tx: None,
+            messages: HashSet::new(),
+            tx: Some(tx),
+            gossip_nodes: Vec::new(),
+            topology: HashMap::new(),
         };
 
-        assert_eq!(node.reply(req).body.payload, Payload::BroadcastOk);
+        let _ = node.handle_message(req);
+
+        let result = rx.recv().unwrap();
+
+        assert_eq!(result.body.payload, Payload::BroadcastOk);
     }
     #[test]
     fn it_should_return_a_correct_read_ok_message() {
-        let msgs = [0, 25, 50, 75, 100];
-        let broadcast_messages = (0..msgs.len()).map(|i| {
+        let msgs = HashSet::from_iter([0, 25, 50, 75, 100]);
+        let broadcast_messages = msgs.iter().map(|i| {
             Message::new(
                 "c1",
                 "n1",
                 &Body {
-                    payload: Payload::Broadcast { message: msgs[i] },
+                    payload: Payload::Broadcast {
+                        message: msgs.get(i).unwrap().to_owned(),
+                    },
                     ..Default::default()
                 },
             )
         });
 
+        let (tx, rx) = channel();
         let mut node = Node {
             node_id: String::from("n1"),
             id: 0,
-            messages: Vec::new(),
-            tx: None,
+            messages: HashSet::new(),
+            tx: Some(tx),
+            gossip_nodes: Vec::new(),
+            topology: HashMap::new(),
         };
 
         broadcast_messages.for_each(|msg| {
-            node.reply(msg);
+            let _ = node.handle_message(msg);
+            rx.recv().unwrap();
         });
 
-        assert_eq!(node.messages.as_ref(), msgs);
+        assert_eq!(node.messages, msgs);
 
         let read_msg = Message::new(
             "c1",
@@ -215,20 +324,17 @@ mod test {
             },
         );
 
-        let read_ok_msg = node.reply(read_msg.clone());
+        let result = node.handle_message(read_msg.clone());
+        let read_ok_msg = rx.recv().unwrap();
 
+        assert!(result.is_ok());
         assert_eq!(
             read_ok_msg.body.payload.type_id(),
             Payload::ReadOk {
-                messages: Vec::new()
+                messages: HashSet::new()
             }
             .type_id()
         );
-        assert_eq!(
-            read_ok_msg.body.payload,
-            Payload::ReadOk {
-                messages: msgs.to_vec()
-            }
-        );
+        assert_eq!(read_ok_msg.body.payload, Payload::ReadOk { messages: msgs });
     }
 }

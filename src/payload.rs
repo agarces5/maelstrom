@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -34,8 +34,12 @@ pub enum Payload {
     BroadcastOk,
     Read,
     ReadOk {
-        messages: Vec<usize>,
+        messages: HashSet<usize>,
     },
+    Gossip {
+        messages: HashSet<usize>,
+    },
+    GossipOk,
 }
 
 impl Payload {
@@ -62,10 +66,14 @@ impl Payload {
                 }
             }
             Payload::GenerateOk { id } => Payload::GenerateOk { id: id.to_string() },
-            Payload::Topology { topology: _ } => Payload::TopologyOk,
-            Payload::TopologyOk => todo!(),
+            Payload::Topology { topology } => {
+                node.gossip_nodes
+                    .extend_from_slice(topology.get(&node.node_id).unwrap());
+                Payload::TopologyOk
+            }
+            Payload::TopologyOk => Payload::TopologyOk,
             Payload::Broadcast { message } => {
-                node.messages.push(message.to_owned());
+                node.messages.insert(*message);
                 Payload::BroadcastOk
             }
             Payload::BroadcastOk => Payload::BroadcastOk,
@@ -74,8 +82,13 @@ impl Payload {
                 messages: node.messages.clone(),
             },
             Payload::ReadOk { messages } => Payload::ReadOk {
-                messages: messages.to_vec(),
+                messages: messages.clone(),
             },
+            Payload::Gossip { messages } => {
+                node.messages.extend(messages);
+                Payload::GossipOk
+            }
+            Payload::GossipOk => Payload::GossipOk,
         }
     }
 }

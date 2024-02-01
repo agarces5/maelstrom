@@ -1,6 +1,9 @@
 #![allow(dead_code)]
 
-pub mod echo;
+pub mod body;
+pub mod message;
+pub mod node;
+pub mod payload;
 
 // pub fn add(left: usize, right: usize) -> usize {
 //     left + right

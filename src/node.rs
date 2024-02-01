@@ -1,15 +1,21 @@
-use serde::{Deserialize, Serialize};
+use std::{fmt::Debug, sync::mpsc::Sender};
 
 use super::{body::Body, message::Message};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Node {
     pub node_id: String,
     pub id: usize,
     pub messages: Vec<usize>,
+    pub tx: Option<Sender<Message>>,
 }
 
 impl Node {
+    pub fn send(&self, msg: Message) -> anyhow::Result<()> {
+        let tx = self.tx.as_ref().unwrap();
+        tx.send(msg)?;
+        Ok(())
+    }
     pub fn reply(&mut self, req: Message) -> Message {
         let payload = req.body.payload.get_response_payload(self);
         Message {
@@ -22,7 +28,7 @@ impl Node {
             },
         }
     }
-    pub fn send(&self, res: Message, mut channel: impl std::io::Write) -> anyhow::Result<()> {
+    pub fn write(&self, res: Message, mut channel: impl std::io::Write) -> anyhow::Result<()> {
         serde_json::to_writer(&mut channel, &res)?;
         channel.write_all(&[b'\n'])?;
         Ok(())
@@ -33,7 +39,7 @@ impl Node {
 mod test {
     use std::any::Any;
 
-    use crate::echo::payload::Payload;
+    use crate::payload::Payload;
 
     use super::*;
 
@@ -63,6 +69,7 @@ mod test {
             node_id: String::from("n1"),
             id: 0,
             messages: Vec::new(),
+            tx: None,
         };
 
         assert_eq!(res, node.reply(req));
@@ -92,6 +99,7 @@ mod test {
             node_id: String::from("n1"),
             id: 0,
             messages: Vec::new(),
+            tx: None,
         };
 
         assert_eq!(res, node.reply(req));
@@ -117,11 +125,12 @@ mod test {
             node_id: String::from("n1"),
             id: 0,
             messages: Vec::new(),
+            tx: None,
         };
         // As send() accept a Writer, use a Cursor to mock an in-memory buffer that is cheaper than other Writer
         let mut channel = std::io::Cursor::new(Vec::new());
         // Send the message into buffer
-        let result = node.send(req, &mut channel);
+        let result = node.write(req, &mut channel);
 
         assert!(result.is_ok());
         // Channel should have the JSON as bytes + a newline.
@@ -141,6 +150,7 @@ mod test {
             node_id: String::from("n1"),
             id: 0,
             messages: Vec::new(),
+            tx: None,
         };
 
         let generated_ids: Vec<String> = (0..ids.len())
@@ -164,6 +174,7 @@ mod test {
             node_id: String::from("n1"),
             id: 0,
             messages: Vec::new(),
+            tx: None,
         };
 
         assert_eq!(node.reply(req).body.payload, Payload::BroadcastOk);
@@ -186,6 +197,7 @@ mod test {
             node_id: String::from("n1"),
             id: 0,
             messages: Vec::new(),
+            tx: None,
         };
 
         broadcast_messages.for_each(|msg| {

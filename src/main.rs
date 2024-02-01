@@ -3,7 +3,7 @@ use std::{
     sync::{Arc, Mutex},
 };
 
-use maelstrom::echo::node::Node;
+use maelstrom::node::Node;
 
 fn main() -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel();
@@ -12,6 +12,7 @@ fn main() -> anyhow::Result<()> {
         id: 0,
         node_id: String::new(),
         messages: Vec::new(),
+        tx: Some(tx.clone()),
     }));
     let mut stdout = std::io::stdout().lock();
 
@@ -21,13 +22,15 @@ fn main() -> anyhow::Result<()> {
         let stdin = std::io::stdin().lock().lines();
         for msg in stdin {
             let msg = serde_json::from_str(&msg?)?;
-            let res = node.lock().unwrap().reply(msg);
-            tx.send(res)?;
+            let mut node = node.lock().unwrap();
+            let res = node.reply(msg);
+            node.send(res)?;
+            // tx.send(res)?;
         }
         anyhow::Ok(())
     });
     while let Ok(res) = rx.recv() {
-        node.lock().unwrap().send(res, &mut stdout)?;
+        node.lock().unwrap().write(res, &mut stdout)?;
     }
     resp_thread
         .join()

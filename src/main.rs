@@ -1,6 +1,6 @@
 use std::{
-    collections::{HashMap, HashSet},
     io::BufRead,
+    str::FromStr,
     sync::{Arc, Mutex},
 };
 
@@ -10,12 +10,8 @@ fn main() -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel();
 
     let node = Arc::new(Mutex::new(Node {
-        id: 0,
-        node_id: String::new(),
-        messages: HashSet::new(),
         tx: Some(tx.clone()),
-        gossip_nodes: Vec::new(),
-        topology: HashMap::new(),
+        ..Default::default()
     }));
     let mut stdout = std::io::stdout().lock();
 
@@ -24,8 +20,8 @@ fn main() -> anyhow::Result<()> {
         let node = resp_node;
         let stdin = std::io::stdin().lock().lines();
         for msg in stdin {
-            let mut node = node.lock().unwrap();
-            let msg: Message = serde_json::from_str(&msg?)?;
+            let mut node = node.lock().expect("Failed to adquire lock in node.");
+            let msg: Message = Message::from_str(&msg?)?;
             node.handle_message(msg)?;
         }
         anyhow::Ok(())

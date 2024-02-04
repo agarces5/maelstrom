@@ -10,6 +10,7 @@ mod init;
 mod init_ok;
 mod read;
 mod read_ok;
+mod state;
 mod topology;
 mod topology_ok;
 
@@ -25,12 +26,20 @@ pub use init::*;
 pub use init_ok::*;
 pub use read::*;
 pub use read_ok::*;
+pub use state::*;
 pub use topology::*;
 pub use topology_ok::*;
 
 use serde::{Deserialize, Serialize};
 
-pub trait Type {}
+use crate::message::Message;
+
+pub trait Type {
+    fn from_msg<M>(msg: Message<M>) -> Self
+    where
+        Self: Sized + Clone,
+        M: Type + Clone;
+}
 
 #[derive(Default, Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
 #[serde(tag = "type")]
@@ -53,4 +62,12 @@ pub enum MessageType {
     GossipOk(GossipOk),
 }
 
-impl Type for MessageType {}
+impl Type for MessageType {
+    fn from_msg<M>(_msg: Message<M>) -> Self
+    where
+        Self: Sized + Clone,
+        M: Type + Clone,
+    {
+        todo!()
+    }
+}

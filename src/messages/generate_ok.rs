@@ -7,4 +7,12 @@ pub struct GenerateOk {
     pub id: String,
 }
 
-impl Type for GenerateOk {}
+impl Type for GenerateOk {
+    fn from_msg<M>(_msg: crate::message::Message<M>) -> Self
+    where
+        Self: Sized + Clone,
+        M: Type + Clone,
+    {
+        todo!()
+    }
+}

@@ -1,23 +1,22 @@
-use crate::{body::Body, message::Message, messages::*};
+use std::sync::{mpsc::Sender, Arc, Mutex};
 
-pub struct CreateGossipOkUseCase;
+use crate::{message::Message, messages::*};
 
-impl CreateGossipOkUseCase {
-    pub fn new() -> Self {
-        Self
-    }
+#[derive(Debug, Clone)]
+pub struct CreateGossipOkUseCase {
+    state: Arc<Mutex<State>>,
+    sender: Sender<Message<MessageType>>,
 }
 
-impl super::UseCase for CreateGossipOkUseCase {
-    fn execute(&self, msg: Message<MessageType>) {
-        let _msg = Message {
-            src: msg.dest,
-            dest: msg.src,
-            body: Body {
-                msg_id: msg.body.msg_id,
-                in_reply_to: msg.body.msg_id,
-                payload: GossipOk,
-            },
-        };
+impl CreateGossipOkUseCase {}
+
+impl super::UseCase<Gossip> for CreateGossipOkUseCase {
+    fn new(state: Arc<Mutex<State>>, sender: Sender<Message<MessageType>>) -> Self {
+        Self { state, sender }
+    }
+    fn execute(&self, _msg: Message<MessageType>, msg_type: Gossip) {
+        let Gossip { message } = msg_type;
+        let mut state = self.state.lock().unwrap();
+        state.messages.insert(message);
     }
 }

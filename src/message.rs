@@ -8,11 +8,13 @@ use crate::messages::{MessageType, Type};
 use super::body::Body;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Message<T: Type> {
+pub struct Message<T: Type + Clone> {
     pub src: String,
     pub dest: String,
     pub body: Body<T>,
 }
+
+// impl<T: Type> Type for Message<T> {}
 
 impl<T: Default + Clone + Type> Message<T> {
     pub fn new(src: &str, dest: &str, body: &Body<T>) -> Self {

@@ -9,4 +9,12 @@ pub struct ReadOk {
     pub messages: HashSet<usize>,
 }
 
-impl Type for ReadOk {}
+impl Type for ReadOk {
+    fn from_msg<M>(_msg: crate::message::Message<M>) -> Self
+    where
+        Self: Sized + Clone,
+        M: Type + Clone,
+    {
+        todo!()
+    }
+}

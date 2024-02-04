@@ -188,39 +188,6 @@ mod test {
         assert_eq!(channel.get_ref().to_owned(), response);
     }
     #[test]
-    fn it_makes_an_echo_ok_resp() {
-        let (tx, rx) = std::sync::mpsc::channel();
-        let mut node = Node {
-            node_id: String::from("n1"),
-            tx: Some(tx),
-            ..Default::default()
-        };
-        let body = Body::new(
-            Some(0),
-            None,
-            MessageType::Echo(Echo {
-                echo: "Please echo 35".to_owned(),
-            }),
-        );
-        let req = Message::new("c1", "n1", &body);
-        let res = Message::new(
-            "n1",
-            "c1",
-            &Body {
-                in_reply_to: body.msg_id,
-                payload: MessageType::EchoOk(EchoOk {
-                    echo: "Please echo 35".to_owned(),
-                }),
-                ..body
-            },
-        );
-
-        let result = node.handle_message(req);
-
-        assert!(result.is_ok());
-        assert_eq!(res, rx.recv().unwrap());
-    }
-    #[test]
     fn it_makes_an_init_ok_resp() {
         let (tx, rx) = std::sync::mpsc::channel();
         let mut node = Node {

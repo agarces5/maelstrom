@@ -4,14 +4,14 @@ use std::{
     sync::mpsc::Sender,
 };
 
-use crate::{body::Body, message::Message, payload::Payload};
+use crate::{body::Body, message::Message, payload::MessageType};
 
 #[derive(Debug, Clone, Default)]
 pub struct Node {
     pub node_id: String,
     pub id: usize,
     pub messages: HashSet<usize>,
-    pub tx: Option<Sender<Message>>,
+    pub tx: Option<Sender<Message<MessageType>>>,
     pub gossip_nodes: Vec<String>,
     pub topology: HashMap<String, Vec<String>>,
 }
@@ -23,7 +23,7 @@ impl Node {
     /// # Errors
     ///
     /// This function will return an error if the node can't send the responses to the mpsc Receiver.
-    pub fn handle_message(&mut self, msg: Message) -> anyhow::Result<()> {
+    pub fn handle_message(&mut self, msg: Message<MessageType>) -> anyhow::Result<()> {
         if let Some(msgs) = self.make_responses(msg) {
             msgs.into_iter().try_for_each(|msg| -> anyhow::Result<()> {
                 self.send(msg)?;
@@ -38,7 +38,11 @@ impl Node {
     /// # Errors
     ///
     /// This function will return an error if can't serialize message provided as JSON or if can't write all the bytes into the channel.
-    pub fn write(&self, res: Message, mut channel: impl std::io::Write) -> anyhow::Result<()> {
+    pub fn write(
+        &self,
+        res: Message<MessageType>,
+        mut channel: impl std::io::Write,
+    ) -> anyhow::Result<()> {
         serde_json::to_writer(&mut channel, &res)?;
         channel.write_all(&[b'\n'])?;
         Ok(())
@@ -49,17 +53,17 @@ impl Node {
     /// With Topology message, set the topology field.
     /// With Broadcast message, push message received in the field messages.
     /// This function returns None if no responses are required for that msg.
-    fn make_responses(&mut self, msg: Message) -> Option<Vec<Message>> {
+    fn make_responses(&mut self, msg: Message<MessageType>) -> Option<Vec<Message<MessageType>>> {
         match msg.body.payload.clone() {
-            Payload::Echo { echo } => {
+            MessageType::Echo { echo } => {
                 let res = msg
                     .to_reply()
                     .with_id(self.id)
-                    .with_payload(Payload::EchoOk { echo });
+                    .with_payload(MessageType::EchoOk { echo });
                 Some(vec![res])
             }
-            Payload::EchoOk { echo: _ } => None,
-            Payload::Init { node_id, node_ids } => {
+            MessageType::EchoOk { echo: _ } => None,
+            MessageType::Init { node_id, node_ids } => {
                 // Set node attributes
                 (self.node_id, self.gossip_nodes) = (node_id, node_ids);
                 self.gossip_nodes.retain(|node_id| node_id != &self.node_id);
@@ -67,34 +71,34 @@ impl Node {
                 let res = msg
                     .to_reply()
                     .with_id(self.id)
-                    .with_payload(Payload::InitOk);
+                    .with_payload(MessageType::InitOk);
                 Some(vec![res])
             }
-            Payload::InitOk => None,
-            Payload::Generate => {
-                let payload = Payload::GenerateOk {
+            MessageType::InitOk => None,
+            MessageType::Generate => {
+                let payload = MessageType::GenerateOk {
                     id: format!("{}-{}", self.node_id, self.id),
                 };
                 let res = msg.to_reply().with_id(self.id).with_payload(payload);
                 Some(vec![res])
             }
-            Payload::GenerateOk { id: _ } => None,
-            Payload::Topology { topology } => {
+            MessageType::GenerateOk { id: _ } => None,
+            MessageType::Topology { topology } => {
                 self.topology = topology;
                 let res = msg
                     .to_reply()
                     .with_id(self.id)
-                    .with_payload(Payload::TopologyOk);
+                    .with_payload(MessageType::TopologyOk);
                 Some(vec![res])
             }
-            Payload::TopologyOk => None,
-            Payload::Broadcast { message } => {
+            MessageType::TopologyOk => None,
+            MessageType::Broadcast { message } => {
                 self.messages.insert(message);
                 let res = msg
                     .to_reply()
                     .with_id(self.id)
-                    .with_payload(Payload::BroadcastOk);
-                let gossip_msgs: Vec<Message> = self
+                    .with_payload(MessageType::BroadcastOk);
+                let gossip_msgs: Vec<Message<MessageType>> = self
                     .gossip_nodes
                     .clone()
                     .iter()
@@ -102,7 +106,7 @@ impl Node {
                         src: self.node_id.to_string(),
                         dest: node_id.to_string(),
                         body: Body {
-                            payload: Payload::Gossip { message },
+                            payload: MessageType::Gossip { message },
                             ..Default::default()
                         },
                     })
@@ -111,25 +115,25 @@ impl Node {
                 res.extend_from_slice(&gossip_msgs);
                 Some(res)
             }
-            Payload::BroadcastOk => None,
-            Payload::Read => {
+            MessageType::BroadcastOk => None,
+            MessageType::Read => {
                 let res = msg
                     .to_reply()
                     .with_id(self.id)
-                    .with_payload(Payload::ReadOk {
+                    .with_payload(MessageType::ReadOk {
                         messages: self.messages.clone(),
                     });
                 Some(vec![res])
             }
-            Payload::ReadOk { messages: _ } => None,
-            Payload::Gossip { message } => {
+            MessageType::ReadOk { messages: _ } => None,
+            MessageType::Gossip { message } => {
                 self.messages.insert(message);
                 // TODO: We are not using responses right now
                 // res.body.payload = Payload::GossipOk;
                 // self.send(res)?;
                 None
             }
-            Payload::GossipOk => None,
+            MessageType::GossipOk => None,
         }
     }
     /// Send the message into the mpsc Receiver in main thread.
@@ -141,7 +145,7 @@ impl Node {
     /// # Errors
     ///
     /// This function will return an error if an error ocurred sending the message to the mpsc Receiver.
-    fn send(&mut self, msg: Message) -> anyhow::Result<()> {
+    fn send(&mut self, msg: Message<MessageType>) -> anyhow::Result<()> {
         let tx = self.tx.as_ref().unwrap();
         tx.send(msg)?;
         self.id += 1;
@@ -151,7 +155,7 @@ impl Node {
 
 #[cfg(test)]
 mod test {
-    use crate::payload::Payload;
+    use crate::payload::MessageType;
 
     use super::*;
 
@@ -160,7 +164,7 @@ mod test {
         let body = Body::new(
             Some(1),
             None,
-            Payload::Echo {
+            MessageType::Echo {
                 echo: "Please echo 35".to_owned(),
             },
         );
@@ -196,7 +200,7 @@ mod test {
         let body = Body::new(
             Some(0),
             None,
-            Payload::Echo {
+            MessageType::Echo {
                 echo: "Please echo 35".to_owned(),
             },
         );
@@ -206,7 +210,7 @@ mod test {
             "c1",
             &Body {
                 in_reply_to: body.msg_id,
-                payload: Payload::EchoOk {
+                payload: MessageType::EchoOk {
                     echo: "Please echo 35".to_owned(),
                 },
                 ..body
@@ -229,7 +233,7 @@ mod test {
         let body = Body::new(
             Some(0),
             None,
-            Payload::Init {
+            MessageType::Init {
                 node_id: "n3".to_string(),
                 node_ids: vec!["n1".to_string(), "n2".to_string(), "n3".to_string()],
             },
@@ -240,7 +244,7 @@ mod test {
             "c1",
             &Body {
                 in_reply_to: body.msg_id,
-                payload: Payload::InitOk {},
+                payload: MessageType::InitOk {},
                 ..body
             },
         );
@@ -259,7 +263,7 @@ mod test {
             ..Default::default()
         };
         let body = Body {
-            payload: Payload::Generate {},
+            payload: MessageType::Generate {},
             ..Default::default()
         };
 
@@ -272,7 +276,7 @@ mod test {
             let msg = Message { ..req.clone() };
             let _ = node.handle_message(msg);
             if let Ok(msg) = rx.recv() {
-                if let Payload::GenerateOk { id } = msg.body.payload {
+                if let MessageType::GenerateOk { id } = msg.body.payload {
                     result.push(id)
                 }
             }
@@ -283,7 +287,7 @@ mod test {
     #[test]
     fn it_should_return_a_broadcast_ok_message() {
         let body = Body {
-            payload: Payload::Broadcast { message: 1000 },
+            payload: MessageType::Broadcast { message: 1000 },
             ..Default::default()
         };
 
@@ -300,7 +304,7 @@ mod test {
 
         let result = rx.recv().unwrap();
 
-        assert_eq!(result.body.payload, Payload::BroadcastOk);
+        assert_eq!(result.body.payload, MessageType::BroadcastOk);
     }
     #[test]
     fn it_should_return_a_correct_read_ok_message() {
@@ -310,7 +314,7 @@ mod test {
                 "c1",
                 "n1",
                 &Body {
-                    payload: Payload::Broadcast {
+                    payload: MessageType::Broadcast {
                         message: msgs.get(i).unwrap().to_owned(),
                     },
                     ..Default::default()
@@ -336,7 +340,7 @@ mod test {
             "c1",
             "n1",
             &Body {
-                payload: Payload::Read,
+                payload: MessageType::Read,
                 ..Default::default()
             },
         );
@@ -347,10 +351,13 @@ mod test {
         assert!(result.is_ok());
         assert_eq!(
             core::any::Any::type_id(&read_ok_msg.body.payload),
-            core::any::Any::type_id(&Payload::ReadOk {
+            core::any::Any::type_id(&MessageType::ReadOk {
                 messages: HashSet::new()
             })
         );
-        assert_eq!(read_ok_msg.body.payload, Payload::ReadOk { messages: msgs });
+        assert_eq!(
+            read_ok_msg.body.payload,
+            MessageType::ReadOk { messages: msgs }
+        );
     }
 }

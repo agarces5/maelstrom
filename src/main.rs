@@ -21,7 +21,7 @@ fn main() -> anyhow::Result<()> {
         let stdin = std::io::stdin().lock().lines();
         for msg in stdin {
             let mut node = node.lock().expect("Failed to adquire lock in node.");
-            let msg: Message = Message::from_str(&msg?)?;
+            let msg: Message<_> = Message::from_str(&msg?)?;
             node.handle_message(msg)?;
         }
         anyhow::Ok(())

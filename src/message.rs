@@ -3,19 +3,19 @@ use std::str::FromStr;
 use anyhow::Context;
 use serde::{Deserialize, Serialize};
 
-use crate::payload::MessageType;
+use crate::messages::{MessageType, Type};
 
 use super::body::Body;
 
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq)]
-pub struct Message<MessageType> {
+pub struct Message<T: Type> {
     pub src: String,
     pub dest: String,
-    pub body: Body<MessageType>,
+    pub body: Body<T>,
 }
 
-impl<MessageType: Default + Clone> Message<MessageType> {
-    pub fn new(src: &str, dest: &str, body: &Body<MessageType>) -> Self {
+impl<T: Default + Clone + Type> Message<T> {
+    pub fn new(src: &str, dest: &str, body: &Body<T>) -> Self {
         Self {
             src: src.to_owned(),
             dest: dest.to_owned(),
@@ -39,7 +39,7 @@ impl<MessageType: Default + Clone> Message<MessageType> {
         self
     }
 
-    pub fn with_payload(mut self, payload: MessageType) -> Self {
+    pub fn with_payload(mut self, payload: T) -> Self {
         self.body.payload = payload;
         self
     }

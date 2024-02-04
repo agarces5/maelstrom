@@ -3,6 +3,7 @@
 pub mod body;
 pub mod controller;
 pub mod message;
+pub mod messages;
 pub mod node;
 pub mod payload;
 pub mod use_case;

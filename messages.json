@@ -1,0 +1,14 @@
+[
+  { "src": "c1", "dest": "n1", "body": { "msg_id": 1, "type": "echo", "echo": "Message 1 incomming" } },
+  { "src": "c1", "dest": "n1", "body": { "msg_id": 1, "type": "echo_ok", "echo": "Message 1 incomming" } },
+  { "src": "c1", "dest": "n1", "body": { "msg_id": 1, "type": "init", "node_id": "n1", "node_ids": ["n1","n2"] } },
+  { "src": "c1", "dest": "n1", "body": { "msg_id": 1, "type": "init_ok"} },
+  { "src": "c1", "dest": "n1", "body": { "msg_id": 1, "type": "generate"} },
+  { "src": "c1", "dest": "n1", "body": { "msg_id": 1, "type": "generate_ok", "id": "n1-1" }},
+  { "src": "c1", "dest": "n1", "body": { "msg_id": 1, "type": "topology", "topology": { "n1": ["n1", "n2"], "n2": ["n1", "n2"]} } },
+  { "src": "c1", "dest": "n1", "body": { "msg_id": 1, "type": "topology_ok"} },
+  { "src": "c1", "dest": "n1", "body": { "msg_id": 1, "type": "broadcast", "message": 1 } },
+  { "src": "c1", "dest": "n1", "body": { "msg_id": 1, "type": "broadcast_ok"} },
+  { "src": "c1", "dest": "n1", "body": { "msg_id": 1, "type": "read"} },
+  { "src": "c1", "dest": "n1", "body": { "msg_id": 1, "type": "read_ok", "messages": [0,1,2,3,4] } }
+]

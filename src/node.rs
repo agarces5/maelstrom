@@ -4,7 +4,7 @@ use std::{
     sync::mpsc::Sender,
 };
 
-use crate::{body::Body, message::Message, payload::MessageType};
+use crate::{body::Body, message::Message, messages::*};
 
 #[derive(Debug, Clone, Default)]
 pub struct Node {
@@ -55,15 +55,15 @@ impl Node {
     /// This function returns None if no responses are required for that msg.
     fn make_responses(&mut self, msg: Message<MessageType>) -> Option<Vec<Message<MessageType>>> {
         match msg.body.payload.clone() {
-            MessageType::Echo { echo } => {
+            MessageType::Echo(Echo { echo }) => {
                 let res = msg
                     .to_reply()
                     .with_id(self.id)
-                    .with_payload(MessageType::EchoOk { echo });
+                    .with_payload(MessageType::EchoOk(EchoOk { echo }));
                 Some(vec![res])
             }
-            MessageType::EchoOk { echo: _ } => None,
-            MessageType::Init { node_id, node_ids } => {
+            MessageType::EchoOk(..) => None,
+            MessageType::Init(Init { node_id, node_ids }) => {
                 // Set node attributes
                 (self.node_id, self.gossip_nodes) = (node_id, node_ids);
                 self.gossip_nodes.retain(|node_id| node_id != &self.node_id);
@@ -75,29 +75,29 @@ impl Node {
                 Some(vec![res])
             }
             MessageType::InitOk => None,
-            MessageType::Generate => {
-                let payload = MessageType::GenerateOk {
+            MessageType::Generate(Generate) => {
+                let payload = MessageType::GenerateOk(GenerateOk {
                     id: format!("{}-{}", self.node_id, self.id),
-                };
+                });
                 let res = msg.to_reply().with_id(self.id).with_payload(payload);
                 Some(vec![res])
             }
-            MessageType::GenerateOk { id: _ } => None,
-            MessageType::Topology { topology } => {
+            MessageType::GenerateOk(..) => None,
+            MessageType::Topology(Topology { topology }) => {
                 self.topology = topology;
                 let res = msg
                     .to_reply()
                     .with_id(self.id)
-                    .with_payload(MessageType::TopologyOk);
+                    .with_payload(MessageType::TopologyOk(TopologyOk));
                 Some(vec![res])
             }
-            MessageType::TopologyOk => None,
-            MessageType::Broadcast { message } => {
+            MessageType::TopologyOk(TopologyOk) => None,
+            MessageType::Broadcast(Broadcast { message }) => {
                 self.messages.insert(message);
                 let res = msg
                     .to_reply()
                     .with_id(self.id)
-                    .with_payload(MessageType::BroadcastOk);
+                    .with_payload(MessageType::BroadcastOk(BroadcastOk));
                 let gossip_msgs: Vec<Message<MessageType>> = self
                     .gossip_nodes
                     .clone()
@@ -106,7 +106,7 @@ impl Node {
                         src: self.node_id.to_string(),
                         dest: node_id.to_string(),
                         body: Body {
-                            payload: MessageType::Gossip { message },
+                            payload: MessageType::Gossip(Gossip { message }),
                             ..Default::default()
                         },
                     })
@@ -115,25 +115,25 @@ impl Node {
                 res.extend_from_slice(&gossip_msgs);
                 Some(res)
             }
-            MessageType::BroadcastOk => None,
-            MessageType::Read => {
+            MessageType::BroadcastOk(..) => None,
+            MessageType::Read(..) => {
                 let res = msg
                     .to_reply()
                     .with_id(self.id)
-                    .with_payload(MessageType::ReadOk {
+                    .with_payload(MessageType::ReadOk(ReadOk {
                         messages: self.messages.clone(),
-                    });
+                    }));
                 Some(vec![res])
             }
-            MessageType::ReadOk { messages: _ } => None,
-            MessageType::Gossip { message } => {
+            MessageType::ReadOk(..) => None,
+            MessageType::Gossip(Gossip { message }) => {
                 self.messages.insert(message);
                 // TODO: We are not using responses right now
                 // res.body.payload = Payload::GossipOk;
                 // self.send(res)?;
                 None
             }
-            MessageType::GossipOk => None,
+            MessageType::GossipOk(..) => None,
         }
     }
     /// Send the message into the mpsc Receiver in main thread.
@@ -155,8 +155,6 @@ impl Node {
 
 #[cfg(test)]
 mod test {
-    use crate::payload::MessageType;
-
     use super::*;
 
     #[test]
@@ -164,9 +162,9 @@ mod test {
         let body = Body::new(
             Some(1),
             None,
-            MessageType::Echo {
+            MessageType::Echo(Echo {
                 echo: "Please echo 35".to_owned(),
-            },
+            }),
         );
         // Make Message to send into "Channel"
         let req = Message::new("c1", "n1", &body);
@@ -200,9 +198,9 @@ mod test {
         let body = Body::new(
             Some(0),
             None,
-            MessageType::Echo {
+            MessageType::Echo(Echo {
                 echo: "Please echo 35".to_owned(),
-            },
+            }),
         );
         let req = Message::new("c1", "n1", &body);
         let res = Message::new(
@@ -210,9 +208,9 @@ mod test {
             "c1",
             &Body {
                 in_reply_to: body.msg_id,
-                payload: MessageType::EchoOk {
+                payload: MessageType::EchoOk(EchoOk {
                     echo: "Please echo 35".to_owned(),
-                },
+                }),
                 ..body
             },
         );
@@ -233,10 +231,10 @@ mod test {
         let body = Body::new(
             Some(0),
             None,
-            MessageType::Init {
+            MessageType::Init(Init {
                 node_id: "n3".to_string(),
                 node_ids: vec!["n1".to_string(), "n2".to_string(), "n3".to_string()],
-            },
+            }),
         );
         let req = Message::new("c1", "n1", &body);
         let res = Message::new(
@@ -263,7 +261,7 @@ mod test {
             ..Default::default()
         };
         let body = Body {
-            payload: MessageType::Generate {},
+            payload: MessageType::Generate(Generate),
             ..Default::default()
         };
 
@@ -276,7 +274,7 @@ mod test {
             let msg = Message { ..req.clone() };
             let _ = node.handle_message(msg);
             if let Ok(msg) = rx.recv() {
-                if let MessageType::GenerateOk { id } = msg.body.payload {
+                if let MessageType::GenerateOk(GenerateOk { id }) = msg.body.payload {
                     result.push(id)
                 }
             }
@@ -287,7 +285,7 @@ mod test {
     #[test]
     fn it_should_return_a_broadcast_ok_message() {
         let body = Body {
-            payload: MessageType::Broadcast { message: 1000 },
+            payload: MessageType::Broadcast(Broadcast { message: 1000 }),
             ..Default::default()
         };
 
@@ -304,7 +302,7 @@ mod test {
 
         let result = rx.recv().unwrap();
 
-        assert_eq!(result.body.payload, MessageType::BroadcastOk);
+        assert_eq!(result.body.payload, MessageType::BroadcastOk(BroadcastOk));
     }
     #[test]
     fn it_should_return_a_correct_read_ok_message() {
@@ -314,9 +312,9 @@ mod test {
                 "c1",
                 "n1",
                 &Body {
-                    payload: MessageType::Broadcast {
+                    payload: MessageType::Broadcast(Broadcast {
                         message: msgs.get(i).unwrap().to_owned(),
-                    },
+                    }),
                     ..Default::default()
                 },
             )
@@ -340,7 +338,7 @@ mod test {
             "c1",
             "n1",
             &Body {
-                payload: MessageType::Read,
+                payload: MessageType::Read(Read),
                 ..Default::default()
             },
         );
@@ -351,13 +349,13 @@ mod test {
         assert!(result.is_ok());
         assert_eq!(
             core::any::Any::type_id(&read_ok_msg.body.payload),
-            core::any::Any::type_id(&MessageType::ReadOk {
+            core::any::Any::type_id(&MessageType::ReadOk(ReadOk {
                 messages: HashSet::new()
-            })
+            }))
         );
         assert_eq!(
             read_ok_msg.body.payload,
-            MessageType::ReadOk { messages: msgs }
+            MessageType::ReadOk(ReadOk { messages: msgs })
         );
     }
 }

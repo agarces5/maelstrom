@@ -1,15 +1,17 @@
 use serde::{Deserialize, Serialize};
 
+use crate::messages::Type;
+
 #[derive(Debug, Clone, Serialize, Deserialize, PartialEq, Eq, Default)]
-pub struct Body<MessageType> {
+pub struct Body<T: Type> {
     pub msg_id: Option<usize>,
     pub in_reply_to: Option<usize>,
     #[serde(flatten)]
-    pub payload: MessageType,
+    pub payload: T,
 }
 
-impl<MessageType> Body<MessageType> {
-    pub fn new(msg_id: Option<usize>, in_reply_to: Option<usize>, payload: MessageType) -> Self {
+impl<T: Type> Body<T> {
+    pub fn new(msg_id: Option<usize>, in_reply_to: Option<usize>, payload: T) -> Self {
         Self {
             msg_id,
             in_reply_to,

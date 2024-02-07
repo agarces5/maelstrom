@@ -1,65 +1,30 @@
-use std::{
-    io::BufRead,
-    str::FromStr,
-    sync::{Arc, Mutex},
-};
+use std::io::{BufRead, Write};
 
-use maelstrom::{controller::Controller, message::Message, messages::State};
+use maelstrom::{domain::State, infrastructure::Controller};
 
-// fn main() -> anyhow::Result<()> {
-//     let (tx, rx) = std::sync::mpsc::channel();
-
-//     let node = Arc::new(Mutex::new(Node {
-//         tx: Some(tx.clone()),
-//         ..Default::default()
-//     }));
-//     let mut stdout = std::io::stdout().lock();
-
-//     let resp_node = node.clone();
-//     let resp_thread = std::thread::spawn(move || {
-//         let node = resp_node;
-//         let stdin = std::io::stdin().lock().lines();
-//         for msg in stdin {
-//             let mut node = node.lock().expect("Failed to adquire lock in node.");
-//             let msg: Message<_> = Message::from_str(&msg?)?;
-//             node.handle_message(msg)?;
-//         }
-//         anyhow::Ok(())
-//     });
-//     while let Ok(res) = rx.recv() {
-//         node.lock().unwrap().write(res, &mut stdout)?;
-//     }
-//     resp_thread
-//         .join()
-//         .expect("Can't join response thread")
-//         .expect("Some error inside resp thread");
-//     Ok(())
-// }
 fn main() -> anyhow::Result<()> {
     let (tx, rx) = std::sync::mpsc::channel();
+    let node = State::shared_default();
 
-    let state = State::new_shared();
-    let controller = Arc::new(Mutex::new(Controller::new(state.clone(), tx.clone())));
-
-    let mut stdout = std::io::stdout().lock();
-
-    let thread_controller = controller.clone();
-    let resp_thread = std::thread::spawn(move || {
-        let controller = thread_controller;
-        let stdin = std::io::stdin().lock().lines();
-        for msg in stdin {
-            let controller = controller.lock().unwrap();
-            let msg: Message<_> = Message::from_str(&msg?)?;
-            controller.handle_request(msg)?;
+    let sender_node = node.clone();
+    let sender_thread = std::thread::spawn(|| {
+        let node = sender_node;
+        let stdin = std::io::stdin().lock();
+        let controller = Controller::new(tx, node);
+        for line in stdin.lines() {
+            let json_input = line?;
+            controller.handle_request(json_input)?;
         }
         anyhow::Ok(())
     });
-    while let Ok(res) = rx.recv() {
-        controller.lock().unwrap().write(res, &mut stdout)?;
+
+    let mut stdout = std::io::stdout();
+    for msg in rx {
+        stdout.write_all(msg.as_bytes())?;
+        stdout.write_all(b"\n")?;
+        node.lock().unwrap().id += 1;
     }
-    resp_thread
-        .join()
-        .expect("Can't join response thread")
-        .expect("Some error inside resp thread");
+
+    sender_thread.join().unwrap()?;
     Ok(())
 }

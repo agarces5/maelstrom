@@ -1,5 +1,1 @@
-#![allow(unused)]
-
-pub mod application;
-pub mod domain;
-pub mod infrastructure;
+#![allow(dead_code)]

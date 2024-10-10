@@ -1,6 +1,6 @@
 #![allow(dead_code)]
 
-use serde_json::json;
+use std::io::BufRead;
 
 mod model;
 
@@ -14,28 +14,43 @@ mod model;
 //   }
 // }
 //
-fn main() {
-    // Create a new json with the given data
-    let raw_incoming_message = json!({
-        "src": "c1",
-        "dest": "n1",
-        "body": {
-            "type": "echo",
-            "msg_id": 1,
-            "echo": "Please echo 35"
-        }
-    });
+fn main() -> Result<(), std::io::Error> {
+    env_logger::init();
 
-    let raw_incoming_message = serde_json::to_string(&raw_incoming_message).unwrap();
+    // Read from stdin
+    let stdin = std::io::stdin();
+    let reader = std::io::BufReader::new(stdin);
 
-    // Process the message
-    let incoming_message = serde_json::from_str::<model::Message>(&raw_incoming_message).unwrap();
+    // let stdout = std::io::stdout();
+    // let mut writer = std::io::BufWriter::new(stdout);
 
-    // Create the response
-    let response = incoming_message.reply();
+    for line in reader.lines() {
+        let mut raw_incoming_message = String::default();
+        match serde_json::to_string(&line?) {
+            Ok(msg) => raw_incoming_message = msg,
+            Err(e) => log::error!("{e}"),
+        };
 
-    let response = serde_json::to_string(&response).unwrap();
+        match serde_json::from_str::<model::Message>(&raw_incoming_message) {
+            Ok(incoming_message) => {
+                let response = incoming_message.reply();
+                let response = serde_json::to_string(&response).unwrap();
+                // writer.write_all(response.as_bytes())?;
+                println!("{}", &response);
+            }
+            Err(e) => {
+                log::error!("Failed to serialize incoming data into Message model with error: {e}")
+            }
+        };
+    }
 
-    println!("{}", raw_incoming_message);
-    println!("{}", response);
+    Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    // use super::*;
+
+    #[test]
+    fn it_works() {}
 }

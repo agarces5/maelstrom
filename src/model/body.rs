@@ -4,32 +4,45 @@ use serde::{Deserialize, Serialize};
 #[serde(tag = "type")]
 #[serde(rename_all = "snake_case")]
 pub enum MessageType {
-    Echo,
-    EchoOk { in_reply_to: u64 },
+    Echo {
+        echo: String,
+    },
+    EchoOk {
+        echo: String,
+    },
+    Init {
+        node_id: String,
+        node_ids: Vec<String>,
+    },
+    InitOk,
+    Error {
+        code: u64,
+        text: String,
+    },
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Body {
     #[serde(flatten)]
     _type: MessageType,
-    msg_id: u64,
-    echo: String,
+    msg_id: u32,
+    in_reply_to: Option<u32>,
 }
 
 impl Body {
-    pub fn new(_type: MessageType, msg_id: u64, echo: String) -> Body {
-        Body {
+    pub fn new(_type: MessageType, msg_id: u32, in_reply_to: Option<u32>) -> Self {
+        Self {
             _type,
             msg_id,
-            echo,
+            in_reply_to,
         }
     }
 
-    pub fn msg_id(&self) -> u64 {
+    pub fn msg_id(&self) -> u32 {
         self.msg_id
     }
 
-    pub fn echo(&self) -> &str {
-        &self.echo
+    pub fn _type(&self) -> &MessageType {
+        &self._type
     }
 }

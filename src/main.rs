@@ -1,47 +1,20 @@
 #![allow(dead_code)]
 
-use std::io::BufRead;
+use std::io::{BufRead, Write};
+
+use crate::model::Message;
 
 mod model;
 
-// {
-//   "src": "c1",
-//   "dest": "n1",
-//   "body": {
-//     "type": "echo",
-//     "msg_id": 1,
-//     "echo": "Please echo 35"
-//   }
-// }
-//
-fn main() -> Result<(), std::io::Error> {
-    env_logger::init();
+fn main() -> anyhow::Result<()> {
+    let stdin = std::io::stdin().lock().lines();
+    let mut stdout = std::io::stdout().lock();
 
-    // Read from stdin
-    let stdin = std::io::stdin();
-    let reader = std::io::BufReader::new(stdin);
-
-    // let stdout = std::io::stdout();
-    // let mut writer = std::io::BufWriter::new(stdout);
-
-    for line in reader.lines() {
-        let mut raw_incoming_message = String::default();
-        match serde_json::to_string(&line?) {
-            Ok(msg) => raw_incoming_message = msg,
-            Err(e) => log::error!("{e}"),
-        };
-
-        match serde_json::from_str::<model::Message>(&raw_incoming_message) {
-            Ok(incoming_message) => {
-                let response = incoming_message.reply();
-                let response = serde_json::to_string(&response).unwrap();
-                // writer.write_all(response.as_bytes())?;
-                println!("{}", &response);
-            }
-            Err(e) => {
-                log::error!("Failed to serialize incoming data into Message model with error: {e}")
-            }
-        };
+    for line in stdin {
+        let msg = serde_json::from_str::<Message>(&line?)?;
+        let resp = msg.reply()?;
+        let _output = serde_json::to_writer(&mut stdout, &resp);
+        let _output = stdout.write_all(b"\n");
     }
 
     Ok(())

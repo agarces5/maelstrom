@@ -22,20 +22,42 @@ impl Message {
         &self.body
     }
 
-    pub fn reply(&self) -> Message {
-        let reply = Message::new(
-            self.dest.clone(),
-            self.src.clone(),
-            Body::new(
-                MessageType::EchoOk {
-                    in_reply_to: self.body.msg_id(),
-                },
-                self.body.msg_id(),
-                self.body().echo().to_string(),
-            ),
-        );
-
-        reply
+    pub fn reply(&self) -> anyhow::Result<Message> {
+        match self.body()._type() {
+            MessageType::Echo { echo } => Ok(Message::new(
+                self.dest.clone(),
+                self.src.clone(),
+                Body::new(
+                    MessageType::EchoOk {
+                        echo: echo.to_owned(),
+                    },
+                    self.body.msg_id(),
+                    Some(self.body.msg_id()),
+                ),
+            )),
+            MessageType::Init {
+                node_id: _,
+                node_ids: _,
+            } => Ok(Message {
+                src: self.dest.clone(),
+                dest: self.src.clone(),
+                body: Body::new(
+                    MessageType::InitOk,
+                    self.body.msg_id(),
+                    Some(self.body.msg_id()),
+                ),
+            }),
+            MessageType::Error { code, text } => {
+                eprintln!("Code: {code}, Text: {text}");
+                log::error!("Code: {code}, Text: {text}");
+                Err(anyhow::anyhow!(
+                    "Invalid data, just node is allowed to send Ok messages!"
+                ))
+            }
+            _ => Err(anyhow::anyhow!(
+                "Invalid data, just node is allowed to send Ok messages!"
+            )),
+        }
     }
 
     pub fn dest(&self) -> &str {
@@ -49,15 +71,17 @@ mod tests {
 
     #[test]
     fn test_reply() {
+        let raw_resp = r#"{"src":"n1","dest":"c1","body":{"type":"echo_ok","in_reply_to":1,"msg_id":1,"echo":"Please echo 35"}}"#;
         let req =
             r#"{"body":{"echo":"Please echo 35","msg_id":1,"type":"echo"},"dest":"n1","src":"c1"}"#;
         let msj: Message = serde_json::from_str(req).unwrap();
-        let reply = msj.reply();
+        let reply = msj.reply().unwrap();
         let resp = serde_json::to_string(&reply).unwrap();
 
+        assert_eq!(resp.len(), raw_resp.len());
         assert_eq!(
             resp,
-            r#"{"src":"n1","dest":"c1","body":{"type":"echo_ok","in_reply_to":1,"msg_id":1,"echo":"Please echo 35"}}"#
+            r#"{"src":"n1","dest":"c1","body":{"type":"echo_ok","echo":"Please echo 35","in_reply_to":1,"msg_id":1}}"#
         );
     }
 }

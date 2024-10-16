@@ -50,3 +50,52 @@ impl Node {
         Ok(resp)
     }
 }
+
+#[cfg(test)]
+mod tests {
+    // use super::*;
+
+    use crate::model::{Message, Node};
+
+    #[test]
+    fn init_msg() {
+        let init_msg = r#"{"body":{"type":"init","msg_id":1,"node_id":"n3","node_ids":["n1","n2","n3"]},"dest":"n1","src":"c1"}"#;
+        let mut node = Node::new();
+
+        let req = serde_json::from_str::<Message>(init_msg).unwrap();
+        let resp = node.reply(req).unwrap();
+        let resp = serde_json::to_string(&resp).unwrap();
+
+        let init_ok_msg =
+            r#"{"src":"n1","dest":"c1","body":{"type":"init_ok","msg_id":1,"in_reply_to":1}}"#;
+        assert_eq!(init_ok_msg, resp);
+    }
+
+    #[test]
+    fn echo_msg() {
+        let echo_msg =
+            r#"{"body":{"type":"echo","msg_id":1,"echo":"Please echo 35"},"dest":"n1","src":"c1"}"#;
+        let mut node = Node::new();
+
+        let req = serde_json::from_str::<Message>(echo_msg).unwrap();
+        let resp = node.reply(req).unwrap();
+        let resp = serde_json::to_string(&resp).unwrap();
+
+        let echo_ok_msg = r#"{"src":"n1","dest":"c1","body":{"type":"echo_ok","echo":"Please echo 35","msg_id":1,"in_reply_to":1}}"#;
+        assert_eq!(echo_ok_msg, resp);
+    }
+
+    #[test]
+    fn generate_msg() {
+        let generate_msg = r#"{"body":{"type":"generate","msg_id":1},"dest":"n1","src":"c1"}"#;
+        let mut node = Node::new();
+        node.set_node_id("n1"); // Avoid to send init message to set node id.
+
+        let req = serde_json::from_str::<Message>(generate_msg).unwrap();
+        let resp = node.reply(req).unwrap();
+        let resp = serde_json::to_string(&resp).unwrap();
+
+        let generate_ok_msg = r#"{"src":"n1","dest":"c1","body":{"type":"generate_ok","id":"n1-1","msg_id":1,"in_reply_to":1}}"#;
+        assert_eq!(generate_ok_msg, resp);
+    }
+}

@@ -60,3 +60,28 @@ Your job is to send a message with the same body back to the client but with a m
 }
 {"src":"n1","dest":"c1","body":{"type":"echo_ok","in_reply_to":1,"msg_id":1,"echo":"Please echo 35"}}
 ```
+
+# Generate ID [https://fly.io/dist-sys/2/](https://fly.io/dist-sys/2/)
+
+In this challenge, you’ll need to implement a globally-unique ID generation system that runs against Maelstrom’s unique-ids workload. Your service should be totally available, meaning that it can continue to operate even in the face of network partitions.
+
+Your node will receive a request message body that looks like this:
+
+```generate
+{
+  "type": "generate"
+}
+{"src":"c1","dest":"n1","body":{"type":"generate","msg_id":1}}
+```
+
+and it will need to return a "generate_ok" message with a unique ID:
+
+```generate_ok
+{
+  "type": "generate_ok",
+  "id": 123
+}
+{"src":"n1","dest":"c1","body":{"type":"generate_ok","in_reply_to":1,"msg_id":1,"id":"n1-1"}}
+```
+
+IDs may be of any type–strings, booleans, integers, floats, arrays, etc.

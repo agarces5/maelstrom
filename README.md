@@ -25,7 +25,7 @@ In response to the init message, each node must respond with a message of type i
   "type":        "init_ok",
   "in_reply_to": 1
 }
-  
+{"src":"n1","dest":"c1","body":{"type":"init_ok","msg_id":1}}
 ```
 
 ## Echo [https://fly.io/dist-sys/1/](https://fly.io/dist-sys/1/)

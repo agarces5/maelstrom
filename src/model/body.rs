@@ -1,32 +1,13 @@
 use serde::{Deserialize, Serialize};
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
-#[serde(tag = "type")]
-#[serde(rename_all = "snake_case")]
-pub enum MessageType {
-    Echo {
-        echo: String,
-    },
-    EchoOk {
-        echo: String,
-    },
-    Init {
-        node_id: String,
-        node_ids: Vec<String>,
-    },
-    InitOk,
-    Error {
-        code: u64,
-        text: String,
-    },
-}
+use crate::model::MessageType;
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Body {
     #[serde(flatten)]
-    _type: MessageType,
-    msg_id: u32,
-    in_reply_to: Option<u32>,
+    pub _type: MessageType,
+    pub msg_id: u32,
+    pub in_reply_to: Option<u32>,
 }
 
 impl Body {

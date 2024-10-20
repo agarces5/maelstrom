@@ -6,12 +6,12 @@ use crate::model::MessageType;
 pub struct Body {
     #[serde(flatten)]
     pub _type: MessageType,
-    pub msg_id: u32,
+    pub msg_id: Option<u32>,
     pub in_reply_to: Option<u32>,
 }
 
 impl Body {
-    pub fn new(_type: MessageType, msg_id: u32, in_reply_to: Option<u32>) -> Self {
+    pub fn new(_type: MessageType, msg_id: Option<u32>, in_reply_to: Option<u32>) -> Self {
         Self {
             _type,
             msg_id,
@@ -19,7 +19,7 @@ impl Body {
         }
     }
 
-    pub fn msg_id(&self) -> u32 {
+    pub fn msg_id(&self) -> Option<u32> {
         self.msg_id
     }
 

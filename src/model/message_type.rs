@@ -1,3 +1,5 @@
+use std::collections::HashMap;
+
 use serde::{Deserialize, Serialize};
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -20,6 +22,13 @@ pub enum Request {
         node_ids: Vec<String>,
     },
     Generate,
+    Topology {
+        topology: HashMap<String, Vec<String>>, // NodeId, Vec<NodeId>
+    },
+    Read,
+    Broadcast {
+        message: usize,
+    },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]
 #[serde(tag = "type")]
@@ -29,4 +38,7 @@ pub enum Response {
     EchoOk { echo: String },
     InitOk,
     GenerateOk { id: String },
+    TopologyOk,
+    ReadOk { messages: Vec<usize> },
+    BroadcastOk,
 }

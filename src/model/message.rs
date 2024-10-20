@@ -38,6 +38,12 @@ impl Message {
                 Request::Generate => MessageType::Response(Response::GenerateOk {
                     id: node.generate_id(),
                 }),
+                Request::Topology { topology: _ } => MessageType::Response(Response::TopologyOk),
+                Request::Read => MessageType::Response(Response::ReadOk {
+                    // messages: node.messages_buffer_mut().drain(..).collect(),
+                    messages: node.messages_buffer_mut().clone(),
+                }),
+                Request::Broadcast { message: _ } => MessageType::Response(Response::BroadcastOk),
             },
             MessageType::Response(resp) => MessageType::Error {
                 code: 12,
@@ -45,7 +51,7 @@ impl Message {
             },
             MessageType::Error { code: _, text: _ } => todo!(),
         };
-        let body = Body::new(resp, self.body().msg_id(), Some(self.body().msg_id()));
+        let body = Body::new(resp, self.body().msg_id(), self.body().msg_id());
 
         Message::new(self.dest.to_owned(), self.src.to_owned(), body)
     }

@@ -22,6 +22,11 @@ script.main = "vendor/maelstrom test -w unique-ids --bin target/release/maelstro
 dependencies = ["build-release"]
 
 [tasks.broadcast-single]
-description = "Test generate ids with our binary"
+description = "Test broadcast single node"
 script.main = "vendor/maelstrom test -w broadcast --bin target/release/maelstrom --node-count 1 --time-limit 20 --rate 10"
+dependencies = ["build-release"]
+
+[tasks.broadcast-multi]
+description = "Test broadcast multi node"
+script.main = "vendor/maelstrom test -w broadcast --bin target/release/maelstrom --node-count 5 --time-limit 20 --rate 10"
 dependencies = ["build-release"]

@@ -3,7 +3,7 @@ use std::sync::mpsc::Sender;
 
 use anyhow::bail;
 
-use crate::model::{Message, MessageType};
+use crate::model::{Body, Message, MessageType};
 
 use super::Request;
 
@@ -11,7 +11,8 @@ use super::Request;
 pub struct Node {
     id: usize,
     node_id: String,
-    neighbors: Vec<String>,
+    topology: HashSet<String>,
+    neighbors: HashSet<String>,
     messages_buffer: HashSet<usize>,
     tx: Sender<Message>,
 }
@@ -21,7 +22,8 @@ impl Node {
         Self {
             id: 0,
             node_id: String::new(),
-            neighbors: Vec::default(),
+            topology: HashSet::default(),
+            neighbors: HashSet::default(),
             messages_buffer: HashSet::default(),
             tx,
         }
@@ -43,15 +45,27 @@ impl Node {
         format!("{}-{}", self.node_id, self.id)
     }
 
-    pub fn set_neighbors(&mut self, neighbors: &[String]) {
-        self.neighbors = neighbors.to_vec()
+    pub fn set_topology(&mut self, topology: &[String]) {
+        self.topology.extend(topology.to_owned());
     }
 
-    pub fn neighbors(&self) -> &[String] {
+    pub fn topology(&self) -> &HashSet<String> {
+        &self.topology
+    }
+
+    pub fn topology_mut(&mut self) -> &mut HashSet<String> {
+        &mut self.topology
+    }
+
+    pub fn set_neighbors(&mut self, neighbors: &[String]) {
+        self.neighbors.extend(neighbors.to_owned());
+    }
+
+    pub fn neighbors(&self) -> &HashSet<String> {
         &self.neighbors
     }
 
-    pub fn neighbors_mut(&mut self) -> &mut Vec<String> {
+    pub fn neighbors_mut(&mut self) -> &mut HashSet<String> {
         &mut self.neighbors
     }
 
@@ -59,21 +73,44 @@ impl Node {
         &mut self.messages_buffer
     }
 
-    pub fn reply(&mut self, req: Message) -> anyhow::Result<Message> {
+    pub fn reply(&mut self, req: Message) -> anyhow::Result<()> {
         match req.body()._type() {
             MessageType::Request(request) => match request {
-                Request::Init {
-                    node_id,
-                    node_ids: _,
-                } => self.set_node_id(node_id),
+                Request::Init { node_id, node_ids } => {
+                    self.set_node_id(node_id);
+                    let filter: Vec<String> = node_ids
+                        .iter()
+                        .filter(|&node| node != node_id)
+                        .cloned()
+                        .collect();
+                    self.set_neighbors(&filter);
+                }
                 Request::Generate => self.increment_id(),
                 Request::Topology { topology } => {
-                    if let Some(neighbors) = topology.get(self.node_id()) {
-                        self.set_neighbors(neighbors);
+                    if let Some(topology) = topology.get(self.node_id()) {
+                        self.set_topology(topology);
                     }
                 }
                 Request::Broadcast { message } => {
                     self.messages_buffer_mut().insert(*message);
+                    for neighbour in self.neighbors() {
+                        let msg = Message::new(
+                            self.node_id(),
+                            neighbour,
+                            Body::new(
+                                MessageType::Request(Request::Gossip {
+                                    message: self.messages_buffer.clone(),
+                                }),
+                                None,
+                                None,
+                            ),
+                        );
+                        let _ = self.tx.send(msg);
+                    }
+                }
+                Request::Gossip { message } => {
+                    self.messages_buffer_mut().extend(message);
+                    return Ok(());
                 }
                 Request::Echo { .. } => {}
                 Request::Read => {}
@@ -85,7 +122,7 @@ impl Node {
 
         self.tx.send(resp.clone())?;
 
-        Ok(resp)
+        Ok(())
     }
 }
 
@@ -96,11 +133,12 @@ mod tests {
     use crate::model::{Message, Node};
 
     fn generate_response(req: &str) -> String {
-        let (tx, _rx) = channel();
+        let (tx, rx) = channel();
         let mut node = Node::new(tx);
         node.set_node_id("n1");
         let req = serde_json::from_str::<Message>(req).unwrap();
-        let resp = node.reply(req).unwrap();
+        node.reply(req).unwrap();
+        let resp = rx.recv().expect("Expect to have response from node");
 
         serde_json::to_string(&resp).unwrap()
     }
@@ -158,15 +196,19 @@ mod tests {
         let ok_resp =
             r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","msg_id":1,"in_reply_to":1}}"#;
 
-        let (tx, _rx) = channel();
+        let (tx, rx) = channel();
         let mut node = Node::new(tx);
         node.set_node_id("n1");
 
         let req = serde_json::from_str::<Message>(req).unwrap();
-        let resp = node.reply(req).unwrap();
+        node.reply(req).unwrap();
+        let resp = rx.recv().expect("Expecto to have response from node");
         let resp = serde_json::to_string(&resp).unwrap();
 
         assert_eq!(ok_resp, resp);
-        assert_eq!(node.neighbors(), ["n2", "n3"]);
+        assert_eq!(
+            node.topology().iter().cloned().collect::<Vec<String>>(),
+            ["n2", "n3"].to_vec()
+        );
     }
 }

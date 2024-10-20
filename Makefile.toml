@@ -30,3 +30,8 @@ dependencies = ["build-release"]
 description = "Test broadcast multi node"
 script.main = "vendor/maelstrom test -w broadcast --bin target/release/maelstrom --node-count 5 --time-limit 20 --rate 10"
 dependencies = ["build-release"]
+
+[tasks.broadcast-fault]
+description = "Test broadcast multi node"
+script.main = "vendor/maelstrom test -w broadcast --bin target/release/maelstrom --node-count 5 --time-limit 20 --rate 10 --nemesis partition"
+dependencies = ["build-release"]

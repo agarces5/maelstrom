@@ -12,12 +12,20 @@ pub struct Message {
 }
 
 impl Message {
-    pub fn new(src: String, dest: String, body: Body) -> Message {
-        Message { src, dest, body }
+    pub fn new(src: &str, dest: &str, body: Body) -> Message {
+        Message {
+            src: src.to_string(),
+            dest: dest.to_string(),
+            body,
+        }
     }
 
     pub fn src(&self) -> &str {
         &self.src
+    }
+
+    pub fn set_src(&mut self, src: &str) {
+        self.src = src.to_string();
     }
 
     pub fn body(&self) -> &Body {
@@ -26,6 +34,10 @@ impl Message {
 
     pub fn dest(&self) -> &str {
         &self.dest
+    }
+
+    pub fn set_dest(&mut self, dest: &str) {
+        self.dest = dest.to_string();
     }
 
     pub fn make_response(&self, node: &mut Node) -> Self {
@@ -44,6 +56,10 @@ impl Message {
                     messages: node.messages_buffer_mut().iter().cloned().collect(),
                 }),
                 Request::Broadcast { message: _ } => MessageType::Response(Response::BroadcastOk),
+                Request::Gossip { message: _ } => MessageType::Error {
+                    code: 12,
+                    text: "Unexpected request".to_string(),
+                },
             },
             MessageType::Response(resp) => MessageType::Error {
                 code: 12,
@@ -53,6 +69,6 @@ impl Message {
         };
         let body = Body::new(resp, self.body().msg_id(), self.body().msg_id());
 
-        Message::new(self.dest.to_owned(), self.src.to_owned(), body)
+        Message::new(self.dest(), self.src(), body)
     }
 }

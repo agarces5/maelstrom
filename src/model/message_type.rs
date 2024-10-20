@@ -1,4 +1,4 @@
-use std::collections::HashMap;
+use std::collections::{HashMap, HashSet};
 
 use serde::{Deserialize, Serialize};
 
@@ -28,6 +28,9 @@ pub enum Request {
     Read,
     Broadcast {
         message: usize,
+    },
+    Gossip {
+        message: HashSet<usize>,
     },
 }
 #[derive(Debug, Clone, Serialize, Deserialize)]

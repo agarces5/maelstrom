@@ -1,25 +1,29 @@
+use std::collections::HashSet;
+use std::sync::mpsc::Sender;
+
 use anyhow::bail;
-use serde::{Deserialize, Serialize};
 
 use crate::model::{Message, MessageType};
 
 use super::Request;
 
-#[derive(Debug, Clone, Serialize, Deserialize)]
+#[derive(Debug, Clone)]
 pub struct Node {
     id: usize,
     node_id: String,
     neighbors: Vec<String>,
-    messages_buffer: Vec<usize>,
+    messages_buffer: HashSet<usize>,
+    tx: Sender<Message>,
 }
 
 impl Node {
-    pub fn new() -> Self {
+    pub fn new(tx: Sender<Message>) -> Self {
         Self {
             id: 0,
             node_id: String::new(),
             neighbors: Vec::default(),
-            messages_buffer: Vec::default(),
+            messages_buffer: HashSet::default(),
+            tx,
         }
     }
 
@@ -51,7 +55,7 @@ impl Node {
         &mut self.neighbors
     }
 
-    pub fn messages_buffer_mut(&mut self) -> &mut Vec<usize> {
+    pub fn messages_buffer_mut(&mut self) -> &mut HashSet<usize> {
         &mut self.messages_buffer
     }
 
@@ -69,7 +73,7 @@ impl Node {
                     }
                 }
                 Request::Broadcast { message } => {
-                    self.messages_buffer_mut().push(*message);
+                    self.messages_buffer_mut().insert(*message);
                 }
                 Request::Echo { .. } => {}
                 Request::Read => {}
@@ -78,16 +82,22 @@ impl Node {
             MessageType::Error { .. } => bail!("Something went wrong!"),
         }
         let resp = req.make_response(self);
+
+        self.tx.send(resp.clone())?;
+
         Ok(resp)
     }
 }
 
 #[cfg(test)]
 mod tests {
+    use std::sync::mpsc::channel;
+
     use crate::model::{Message, Node};
 
     fn generate_response(req: &str) -> String {
-        let mut node = Node::new();
+        let (tx, _rx) = channel();
+        let mut node = Node::new(tx);
         node.set_node_id("n1");
         let req = serde_json::from_str::<Message>(req).unwrap();
         let resp = node.reply(req).unwrap();
@@ -148,7 +158,8 @@ mod tests {
         let ok_resp =
             r#"{"src":"n1","dest":"c1","body":{"type":"topology_ok","msg_id":1,"in_reply_to":1}}"#;
 
-        let mut node = Node::new();
+        let (tx, _rx) = channel();
+        let mut node = Node::new(tx);
         node.set_node_id("n1");
 
         let req = serde_json::from_str::<Message>(req).unwrap();

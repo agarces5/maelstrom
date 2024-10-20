@@ -41,7 +41,7 @@ impl Message {
                 Request::Topology { topology: _ } => MessageType::Response(Response::TopologyOk),
                 Request::Read => MessageType::Response(Response::ReadOk {
                     // messages: node.messages_buffer_mut().drain(..).collect(),
-                    messages: node.messages_buffer_mut().clone(),
+                    messages: node.messages_buffer_mut().iter().cloned().collect(),
                 }),
                 Request::Broadcast { message: _ } => MessageType::Response(Response::BroadcastOk),
             },

@@ -107,6 +107,7 @@ Your node will receive a request message body that looks like this:
   "type": "broadcast",
   "message": 1000
 }
+{"src":"c1","dest":"n1","body":{"type":"broadcast","message":1}}
 ```
 
 It should store the "message" value locally so it can be read later. In response, it should send an acknowledge with a broadcast_ok message:
@@ -115,6 +116,7 @@ It should store the "message" value locally so it can be read later. In response
 {
   "type": "broadcast_ok"
 }
+{"src":"n1","dest":"c1","body":{"type":"broadcast_ok"}}
 ```
 
 ### RPC: read
@@ -127,6 +129,7 @@ Your node will receive a request message body that looks like this:
 {
   "type": "read"
 }
+{"src":"c1","dest":"n1","body":{"type":"read"}}
 ```
 
 In response, it should return a read_ok message with a list of values it has seen:
@@ -136,6 +139,7 @@ In response, it should return a read_ok message with a list of values it has see
   "type": "read_ok",
   "messages": [1, 8, 72, 25]
 }
+{"src":"n1","dest":"c1","body":{"type":"read_ok","messages":[1, 8, 72, 25]}}
 ```
 
 The order of the returned values does not matter.
@@ -155,6 +159,7 @@ Your node will receive a request message body that looks like this:
     "n3": ["n1"]
   }
 }
+{"src":"c1","dest":"n1","body":{"type":"topology","topology":{"n1":["n2","n3"],"n2":["n1"],"n3":["n1"]}}}
 ```
 
 In response, your node should return a topology_ok message body:
@@ -163,5 +168,6 @@ In response, your node should return a topology_ok message body:
 {
   "type": "topology_ok"
 }
+{"src":"n1","dest":"c1","body":{"type":"topology_ok"}}
 ```
 
